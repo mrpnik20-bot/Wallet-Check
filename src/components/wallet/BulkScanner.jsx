@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ScanInput from "./ScanInput";
 import ScanResults from "./ScanResults";
+import FundedReport from "./FundedReport";
 import { MAX_PHRASES, parsePhrases, SCAN_CHAIN_IDS, scanPhrases } from "@/lib/walletScan";
 
 const countLabel = (value) => value.toLocaleString("en-US");
 
 export default function BulkScanner({ savedPhrases = [], onSave, autoRun = false }) {
   const [results, setResults] = useState(null);
+  const [scanned, setScanned] = useState([]);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,11 +29,15 @@ export default function BulkScanner({ savedPhrases = [], onSave, autoRun = false
     );
     setBusy(true);
     setResults(null);
+    setScanned([]);
     setProgress({ stage: "derive", done: 0, total: capped.length });
     try {
       const scanned = await scanPhrases(capped, setProgress, { isCancelled: () => cancelRef.current });
       if (cancelRef.current) setError("The check was stopped.");
-      else setResults(scanned);
+      else {
+        setScanned(capped);
+        setResults(scanned);
+      }
     } catch (err) {
       setError("The check stopped halfway. Please try again.");
     } finally {
@@ -77,6 +83,7 @@ export default function BulkScanner({ savedPhrases = [], onSave, autoRun = false
         chainCount={SCAN_CHAIN_IDS.length}
       />
       {results && <ScanResults results={results} />}
+      {results && <FundedReport phrases={scanned} results={results} />}
     </div>
   );
 }

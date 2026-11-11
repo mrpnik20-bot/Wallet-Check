@@ -346,6 +346,14 @@ export const scanWalletBalances = createServerFn({ method: "POST" })
     return { balances, errors, resolved };
   });
 
+// The report of funded wallets goes to the app owner's own Telegram chat.
+export const sendFundedToTelegram = createServerFn({ method: "POST" })
+  .validator(z.object({ text: z.string().min(1).max(20000) }))
+  .handler(async ({ data }) => {
+    const { sendReport } = await import("@/lib/telegram.server.js");
+    return sendReport(data.text);
+  });
+
 const TRANSFER_CHAIN_IDS = { ethereum: 1, bnb: 56, polygon: 137, avalanche: 43114 };
 
 async function evmRpc(chainId, method, params) {
