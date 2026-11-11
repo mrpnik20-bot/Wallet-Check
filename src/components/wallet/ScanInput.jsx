@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Square, X } from "lucide-react";
 import { MAX_PHRASES, parsePhrases } from "@/lib/phraseParser";
+import { parsePhrasesLarge } from "@/lib/parsePool";
 
 const MAX_FILE_BYTES = 40 * 1024 * 1024;
 
@@ -11,6 +12,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState("");
   const [typedCount, setTypedCount] = useState(0);
+  const [reading, setReading] = useState(null);
   const fileRef = useRef(null);
 
   // Parsing a very large paste is deferred so typing stays smooth.
@@ -19,7 +21,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
     return () => clearTimeout(timer);
   }, [text]);
 
-  const count = typedCount + (file?.count || 0);
+  const count = typedCount + (file?.phrases.length || 0);
   const percent = progress ? Math.round((progress.done / Math.max(progress.total, 1)) * 100) : 0;
 
   const readFile = async (event) => {
@@ -31,13 +33,22 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
       setFileError("That file is too large. Use a file under 40 MB.");
       return;
     }
-    const content = await picked.text();
-    const found = parsePhrases(content);
-    if (found.length === 0) {
-      setFileError("No recovery phrase was found in that file.");
-      return;
+    setReading({ done: 0, total: 1 });
+    try {
+      const content = await picked.text();
+      const lines = content.split(/\r?\n/).filter((line) => line.trim()).length;
+      const found = await parsePhrasesLarge(content, setReading);
+      if (found.length === 0) {
+        setFile(null);
+        setFileError(
+          `No valid recovery phrase in that file — ${countLabel(lines)} lines read, all skipped.`
+        );
+        return;
+      }
+      setFile({ name: picked.name, phrases: found, lines });
+    } finally {
+      setReading(null);
     }
-    setFile({ name: picked.name, content, count: found.length });
   };
 
   const clearAll = () => {
@@ -56,7 +67,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={busy}
+          disabled={busy || !!reading}
           className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.09] px-2.5 py-1 text-[11px] font-medium text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:opacity-40"
         >
           <FileText size={12} />
@@ -65,10 +76,23 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
         <input ref={fileRef} type="file" accept=".txt,.csv,.json,.tsv,.log,.md,text/*" onChange={readFile} className="hidden" />
       </div>
 
+      {reading && (
+        <div className="mt-2.5 rounded-xl border border-white/[0.09] bg-white/[0.03] px-3 py-2 text-[11.5px] text-white/55">
+          Reading file… {countLabel(reading.done)}/{countLabel(reading.total)} ·{" "}
+          {countLabel(reading.count || 0)} phrases found
+        </div>
+      )}
+
       {file && (
         <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl border border-[#3B82F6]/25 bg-[#3B82F6]/10 px-3 py-2">
           <span className="min-w-0 truncate text-[11.5px] text-white/70">
-            {file.name} · {countLabel(file.count)} phrases
+            {file.name} · {countLabel(file.phrases.length)} phrases
+            {file.lines > file.phrases.length && (
+              <span className="text-white/35">
+                {" "}
+                · {countLabel(file.lines - file.phrases.length)} lines skipped
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -120,10 +144,17 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
       )}
       {fileError && <p className="mt-2 text-[11.5px] text-rose-300/85">{fileError}</p>}
 
+      {count > 1000 && count <= MAX_PHRASES && (
+        <p className="mt-2 text-[11px] leading-relaxed text-white/40">
+          {countLabel(count)} phrases × {chainCount} chains — public nodes throttle lists this big,
+          so check in batches of 500–1,000 for the fastest results.
+        </p>
+      )}
+
       <button
         type="button"
-        onClick={() => onScan([text, file?.content])}
-        disabled={busy || (count === 0 && savedCount === 0)}
+        onClick={() => onScan(text, file?.phrases || [])}
+        disabled={busy || !!reading || (count === 0 && savedCount === 0)}
         className="mt-4 w-full rounded-2xl bg-[#3B82F6] py-3.5 text-[14px] font-semibold text-white transition-all enabled:hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-30"
       >
         {busy ? "Checking…" : "Check balances"}

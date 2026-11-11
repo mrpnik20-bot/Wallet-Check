@@ -30,7 +30,8 @@ export function parsePhrases(text) {
     if (tokens.length < 12) continue;
 
     // Fast path: one phrase, or a run of 12-word phrases, filling the line exactly.
-    if (tokens.length % 12 === 0 && tokens.length <= 480) {
+    const exactRun = tokens.length % 12 === 0 && tokens.length <= 480;
+    if (exactRun) {
       let clean = true;
       for (let start = 0; start < tokens.length; start += 12) {
         if (!isValid(tokens.slice(start, start + 12))) {
@@ -42,6 +43,13 @@ export function parsePhrases(text) {
         for (let start = 0; start < tokens.length; start += 12) push(tokens.slice(start, start + 12));
         continue;
       }
+    }
+
+    // A line holding one phrase is the common case: it is checked once above and,
+    // when the checksum fails, skipped straight away instead of sliding word by word.
+    if (LENGTHS.includes(tokens.length)) {
+      if (!exactRun && isValid(tokens)) push(tokens);
+      continue;
     }
 
     // Otherwise slide a window over the line, taking the longest valid phrase.

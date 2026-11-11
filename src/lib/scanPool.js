@@ -2,7 +2,7 @@
 // when workers are unavailable.
 import { deriveScanAddresses } from "./walletKeys";
 
-const BATCH = 16;
+const BATCH = 32;
 
 function createWorkers() {
   if (typeof Worker === "undefined" || typeof navigator === "undefined") return null;

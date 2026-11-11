@@ -56,19 +56,13 @@ export default function BulkScanner({ savedPhrases = [], onSave, autoRun = false
     run(savedPhrases);
   }, [autoRun, savedPhrases, run]);
 
-  const submit = async (sources) => {
-    const pasted = parsePhrases((sources || []).filter(Boolean).join("\n"));
-    let list = savedPhrases;
+  const submit = async (text, filePhrases = []) => {
+    const pasted = [...new Set([...parsePhrases(text), ...filePhrases])];
     if (pasted.length > 0 && onSave) {
-      try {
-        list = (await onSave(pasted)) || savedPhrases;
-      } catch (err) {
-        list = savedPhrases;
-      }
-    } else if (pasted.length > 0) {
-      list = pasted;
+      // A list this large may not fit in device storage — the check goes ahead regardless.
+      await onSave(pasted).catch(() => null);
     }
-    await run(list);
+    await run(pasted.length > 0 ? [...new Set([...savedPhrases, ...pasted])] : savedPhrases);
   };
 
   return (

@@ -38,7 +38,11 @@ export function WalletProvider({ children }) {
       if (!state.pin) return state.phrases;
       const merged = [...new Set([...state.phrases, ...extra.map(normalize).filter(Boolean)])];
       if (merged.length === state.phrases.length) return merged;
-      await writeVault(merged, state.pin);
+      try {
+        await writeVault(merged, state.pin);
+      } catch {
+        // device storage is full — the list is still checked now and kept for this session
+      }
       setState((current) => ({ ...current, hasVault: true, phrases: merged }));
       return merged;
     },
