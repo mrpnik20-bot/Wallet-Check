@@ -165,7 +165,8 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
         <span className="min-w-0">
           <span className="block text-[12.5px] font-medium text-white/80">Tokens, NFTs &amp; gifts</span>
           <span className="mt-0.5 block text-[11px] leading-relaxed text-white/35">
-            ERC-20, SPL, TRC-20, TON jettons, NFTs and Telegram gifts — slower
+            Every Trust Wallet coin on BNB Chain plus ERC-20, SPL, TRC-20, TON jettons,
+            NFTs and Telegram gifts — slower
           </span>
         </span>
         <span

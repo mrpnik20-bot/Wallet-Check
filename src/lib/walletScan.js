@@ -1,6 +1,6 @@
 // Bulk wallet check: every phrase is derived locally, only public addresses leave the device.
 import { getChain } from "./chains";
-import { getChainPrices, scanCollectibles, scanWalletBalances } from "./server-fns";
+import { getChainPrices, getTokenPrices, scanCollectibles, scanWalletBalances } from "./server-fns";
 import { deriveAll } from "./scanPool";
 import { MAX_PHRASES, parsePhrases } from "./phraseParser";
 
@@ -66,7 +66,7 @@ function linkFor(chainId, address) {
 }
 
 // Every coin, token and collectible one wallet turned out to hold.
-function holdingsFor(wallet, { balances, tokens, resolved, prices }) {
+function holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices }) {
   const list = [];
   for (const chainId of SCAN_CHAIN_IDS) {
     const address = wallet.addresses[chainId];
@@ -107,13 +107,18 @@ function holdingsFor(wallet, { balances, tokens, resolved, prices }) {
         continue;
       }
       if (!(token.amount > 0)) continue;
+      const rate = token.contract ? tokenPrices[`${chainId}|${token.contract.toLowerCase()}`] : null;
+      const usd = rate ? token.amount * rate : null;
+      // A token with a known value below a cent is dust; unknown values are kept,
+      // since a coin without a price feed may still be worth holding.
+      if (usd !== null && usd < DUST_USD) continue;
       list.push({
         kind: "token",
         chainId,
         symbol: token.symbol,
         name: token.symbol,
         amount: token.amount,
-        usd: null,
+        usd,
         address: shown,
         link: linkFor(chainId, shown),
       });
@@ -185,6 +190,28 @@ async function addCollectibles(rows, resolved, onProgress, cancelled) {
   return rows;
 }
 
+// USD value for every coin the check turned up, in one price request.
+async function readTokenPrices(tokens) {
+  const pairs = [];
+  const seen = new Set();
+  for (const [key, list] of Object.entries(tokens)) {
+    const chainId = key.split("|")[0];
+    for (const token of list) {
+      if (!token.contract) continue;
+      const id = `${chainId}|${token.contract.toLowerCase()}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      pairs.push({ chain_id: chainId, contract: token.contract });
+    }
+  }
+  if (pairs.length === 0) return {};
+  try {
+    return await getTokenPrices({ data: { tokens: pairs.slice(0, 200) } });
+  } catch {
+    return {};
+  }
+}
+
 export async function scanPhrases(phrases, onProgress, options = {}) {
   const cancelled = () => !!options.isCancelled?.();
   const list = phrases.slice(0, MAX_PHRASES);
@@ -243,8 +270,10 @@ export async function scanPhrases(phrases, onProgress, options = {}) {
     Array.from({ length: Math.min(PARALLEL_CHUNKS, chunks.length) }, () => worker())
   );
 
+  const tokenPrices = await readTokenPrices(tokens);
+
   let results = wallets.map((wallet) => {
-    const holdings = holdingsFor(wallet, { balances, tokens, resolved, prices });
+    const holdings = holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices });
     const total = holdings.reduce((sum, item) => sum + (item.usd || 0), 0);
     return { ...wallet, holdings, total };
   });
