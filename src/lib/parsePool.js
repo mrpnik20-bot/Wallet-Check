@@ -33,6 +33,44 @@ function createWorkers() {
   }
 }
 
+const SLICE_BYTES = 4 * 1024 * 1024;
+
+// Reads a huge file slice by slice, so even a 100 MB list is parsed without
+// loading it into memory in one go. A phrase is never split across slices.
+export async function parseFilePhrases(file, onProgress) {
+  const total = Math.max(1, Math.ceil(file.size / SLICE_BYTES));
+  const seen = new Set();
+  const phrases = [];
+  let lines = 0;
+  let carry = "";
+
+  for (let index = 0; index < total; index += 1) {
+    const slice = file.slice(index * SLICE_BYTES, (index + 1) * SLICE_BYTES);
+    const text = carry + (await slice.text());
+    let ready = text;
+    let rest = "";
+    if (index < total - 1) {
+      const cut = text.lastIndexOf("\n");
+      if (cut > 0) {
+        ready = text.slice(0, cut);
+        rest = text.slice(cut);
+      }
+    }
+    carry = rest;
+    lines += ready.split(/\r?\n/).filter((line) => line.trim()).length;
+
+    const found = await parsePhrasesLarge(ready);
+    for (const phrase of found) {
+      if (seen.has(phrase)) continue;
+      seen.add(phrase);
+      phrases.push(phrase);
+    }
+    onProgress?.({ done: index + 1, total, count: phrases.length });
+  }
+
+  return { phrases, lines };
+}
+
 export async function parsePhrasesLarge(text, onProgress) {
   const source = String(text || "");
   const chunks = splitChunks(source);

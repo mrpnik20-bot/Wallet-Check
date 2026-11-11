@@ -49,6 +49,25 @@ export function WalletProvider({ children }) {
     [state.pin, state.phrases]
   );
 
+  // After a bulk check only the wallets that hold funds stay saved. The wallet
+  // this device is signed in with is always kept, so the app never locks itself out.
+  const retainPhrases = useCallback(
+    async (keep) => {
+      if (!state.pin) return state.phrases;
+      const wanted = new Set([...(keep || []), ...(state.phrase ? [state.phrase] : [])].map(normalize));
+      const next = state.phrases.filter((item) => wanted.has(item));
+      if (next.length === 0 || next.length === state.phrases.length) return state.phrases;
+      try {
+        await writeVault(next, state.pin);
+      } catch {
+        // device storage refused the write — the list stays as it is
+      }
+      setState((current) => ({ ...current, phrases: next }));
+      return next;
+    },
+    [state.pin, state.phrase, state.phrases]
+  );
+
   const lock = useCallback(() => {
     setState((current) => ({ ...current, phrase: null, phrases: [], pin: null }));
   }, []);
@@ -79,6 +98,7 @@ export function WalletProvider({ children }) {
     create,
     unlock,
     addPhrases,
+    retainPhrases,
     lock,
     verifyPin,
     changePin,

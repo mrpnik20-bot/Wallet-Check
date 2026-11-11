@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Square, X } from "lucide-react";
 import { MAX_PHRASES, parsePhrases } from "@/lib/phraseParser";
-import { parsePhrasesLarge } from "@/lib/parsePool";
+import { parseFilePhrases } from "@/lib/parsePool";
 
-const MAX_FILE_BYTES = 40 * 1024 * 1024;
+const MAX_FILE_BYTES = 100 * 1024 * 1024;
+
+// Every text format the parser can read — phrases are picked out of any layout.
+const FILE_TYPES =
+  ".txt,.csv,.tsv,.json,.jsonl,.ndjson,.md,.log,.dat,.lst,.list,.sql,.xml,.yaml,.yml,.text,text/*,application/json";
 
 const countLabel = (value) => value.toLocaleString("en-US");
 
@@ -30,22 +34,20 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
     if (!picked) return;
     setFileError("");
     if (picked.size > MAX_FILE_BYTES) {
-      setFileError("That file is too large. Use a file under 40 MB.");
+      setFileError("That file is too large. Use a file under 100 MB.");
       return;
     }
     setReading({ done: 0, total: 1 });
     try {
-      const content = await picked.text();
-      const lines = content.split(/\r?\n/).filter((line) => line.trim()).length;
-      const found = await parsePhrasesLarge(content, setReading);
-      if (found.length === 0) {
+      const { phrases, lines } = await parseFilePhrases(picked, setReading);
+      if (phrases.length === 0) {
         setFile(null);
         setFileError(
           `No valid recovery phrase in that file — ${countLabel(lines)} lines read, all skipped.`
         );
         return;
       }
-      setFile({ name: picked.name, phrases: found, lines });
+      setFile({ name: picked.name, phrases, lines });
     } finally {
       setReading(null);
     }
@@ -73,7 +75,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
           <FileText size={12} />
           Upload file
         </button>
-        <input ref={fileRef} type="file" accept=".txt,.csv,.json,.tsv,.log,.md,text/*" onChange={readFile} className="hidden" />
+        <input ref={fileRef} type="file" accept={FILE_TYPES} onChange={readFile} className="hidden" />
       </div>
 
       {reading && (

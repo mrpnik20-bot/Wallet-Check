@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_authed/scan")({
 });
 
 function ScanPage() {
-  const { phrases, addPhrases } = useWallet();
+  const { phrases, addPhrases, retainPhrases } = useWallet();
 
   return (
     <div className="animate-rise space-y-5">
@@ -25,7 +25,7 @@ function ScanPage() {
         </p>
       </header>
 
-      <BulkScanner savedPhrases={phrases} onSave={addPhrases} autoRun />
+      <BulkScanner savedPhrases={phrases} onSave={addPhrases} onRetain={retainPhrases} autoRun />
     </div>
   );
 }
