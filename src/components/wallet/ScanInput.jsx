@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Square, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { MAX_PHRASES, parsePhrases } from "@/lib/phraseParser";
 import { parseFilePhrases } from "@/lib/parsePool";
 
@@ -16,6 +17,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState("");
   const [typedCount, setTypedCount] = useState(0);
+  const [deep, setDeep] = useState(true);
   const [reading, setReading] = useState(null);
   const fileRef = useRef(null);
 
@@ -155,7 +157,35 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
 
       <button
         type="button"
-        onClick={() => onScan(text, file?.phrases || [])}
+        onClick={() => setDeep((value) => !value)}
+        disabled={busy}
+        aria-pressed={deep}
+        className="mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] px-3.5 py-2.5 text-left transition-colors enabled:hover:border-white/20 disabled:opacity-50"
+      >
+        <span className="min-w-0">
+          <span className="block text-[12.5px] font-medium text-white/80">Tokens, NFTs &amp; gifts</span>
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-white/35">
+            ERC-20, SPL, TRC-20, TON jettons, NFTs and Telegram gifts — slower
+          </span>
+        </span>
+        <span
+          className={cn(
+            "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+            deep ? "bg-[#3B82F6]" : "bg-white/15"
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+              deep ? "left-[18px]" : "left-0.5"
+            )}
+          />
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onScan(text, file?.phrases || [], deep)}
         disabled={busy || !!reading || (count === 0 && savedCount === 0)}
         className="mt-4 w-full rounded-2xl bg-[#3B82F6] py-3.5 text-[14px] font-semibold text-white transition-all enabled:hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-30"
       >
@@ -165,7 +195,13 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
       {busy && progress && (
         <div className="mt-4">
           <div className="flex items-center justify-between text-[11.5px] text-white/45">
-            <span>{progress.stage === "derive" ? "Deriving addresses" : "Reading balances from the chains"}</span>
+            <span>
+              {progress.stage === "derive"
+                ? "Deriving addresses"
+                : progress.stage === "collect"
+                  ? "Reading tokens, NFTs & gifts"
+                  : "Reading balances from the chains"}
+            </span>
             <span className="num text-white/70">
               {countLabel(progress.done)}/{countLabel(progress.total)}
             </span>

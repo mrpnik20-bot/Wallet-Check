@@ -69,16 +69,22 @@ export default function ScanResults({ results }) {
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {wallet.holdings.map((holding) => (
                     <a
-                      key={holding.chainId}
+                      key={`${holding.kind}-${holding.chainId}-${holding.symbol}-${holding.name || ""}`}
                       href={holding.link}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] text-white/70 transition-colors hover:bg-white/[0.09] hover:text-white"
                     >
                       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: holdingColor(holding.chainId) }} />
-                      <span className="num">
-                        {formatAmount(holding.amount, 4)} {holding.symbol}
-                      </span>
+                      {holding.kind === "nft" ? (
+                        <span className="max-w-[190px] truncate">
+                          {holding.symbol} · {holding.name}
+                        </span>
+                      ) : (
+                        <span className="num">
+                          {formatAmount(holding.amount, 4)} {holding.symbol}
+                        </span>
+                      )}
                       {holding.usd ? <span className="text-white/35">{formatUsd(holding.usd)}</span> : null}
                       <ArrowUpRight size={11} className="text-white/30" />
                     </a>
@@ -117,6 +123,14 @@ const COLORS = {
   base: "#0052FF",
   arbitrum: "#28A0F0",
   ton: "#0098EA",
+  optimism: "#FF0420",
+  zksync: "#8C8DFC",
+  linea: "#61DFFF",
+  scroll: "#FFEEDA",
+  gnosis: "#3E6957",
+  celo: "#35D07F",
+  mantle: "#7B8BFF",
+  blast: "#FCFC03",
 };
 
 const holdingColor = (chainId) => COLORS[chainId] || "#3B82F6";

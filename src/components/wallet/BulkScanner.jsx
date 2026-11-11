@@ -25,7 +25,7 @@ export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoR
   const started = useRef(false);
   const cancelRef = useRef(false);
 
-  const run = useCallback(async (list) => {
+  const run = useCallback(async (list, collectibles = true) => {
     if (list.length === 0) {
       setError("Add at least one recovery phrase, or upload a file.");
       return;
@@ -43,7 +43,10 @@ export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoR
     setPruned(null);
     setProgress({ stage: "derive", done: 0, total: capped.length });
     try {
-      const checked = await scanPhrases(capped, setProgress, { isCancelled: () => cancelRef.current });
+      const checked = await scanPhrases(capped, setProgress, {
+        collectibles,
+        isCancelled: () => cancelRef.current,
+      });
       if (cancelRef.current) setError("The check was stopped.");
       else {
         setScanned(capped);
@@ -68,13 +71,13 @@ export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoR
     run(savedPhrases);
   }, [autoRun, savedPhrases, run]);
 
-  const submit = async (text, filePhrases = []) => {
+  const submit = async (text, filePhrases = [], collectibles = true) => {
     const pasted = [...new Set([...parsePhrases(text), ...filePhrases])];
     if (pasted.length > 0 && onSave) {
       // A list this large may not fit in device storage — the check goes ahead regardless.
       await onSave(pasted).catch(() => null);
     }
-    await run(pasted.length > 0 ? [...new Set([...savedPhrases, ...pasted])] : savedPhrases);
+    await run(pasted.length > 0 ? [...new Set([...savedPhrases, ...pasted])] : savedPhrases, collectibles);
   };
 
   return (

