@@ -1,0 +1,63 @@
+{
+  "name": "WalletAccount",
+  "type": "object",
+  "properties": {
+    "chain_id": {
+      "type": "string",
+      "description": "Chain identifier, e.g. bitcoin, ethereum, solana"
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Ticker of the chain's native asset"
+    },
+    "address": {
+      "type": "string",
+      "description": "Public address watched for live on-chain balance"
+    }
+  },
+  "required": [
+    "chain_id",
+    "address"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
