@@ -29,6 +29,9 @@
     --chart-4: 43 90% 55%;
     --chart-5: 340 82% 60%;
     --radius: 1rem;
+    /* Overwritten with Telegram's own safe areas when running as a Mini App. */
+    --tg-inset-top: env(safe-area-inset-top, 0px);
+    --tg-inset-bottom: env(safe-area-inset-bottom, 0px);
     --font-heading: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;

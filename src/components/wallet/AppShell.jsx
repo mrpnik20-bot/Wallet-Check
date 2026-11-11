@@ -68,7 +68,7 @@ export default function AppShell({ children }) {
       </aside>
 
       <div className="lg:pl-[248px]">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#0B1220]/85 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#0B1220]/85 px-4 pb-3 pt-[calc(0.75rem+var(--tg-inset-top))] backdrop-blur-xl lg:hidden">
           <Brand />
           <Link
             to="/settings"
@@ -82,7 +82,7 @@ export default function AppShell({ children }) {
         <main className="mx-auto w-full max-w-[720px] px-4 pb-24 pt-5 sm:px-6 lg:pb-16 lg:pt-10">{children}</main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-white/[0.07] bg-[#0B1220]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-0 bottom-[var(--tg-inset-bottom)] z-30 grid grid-cols-5 border-t border-white/[0.07] bg-[#0B1220]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
         {NAV.map(({ to, label, Icon, exact }) => (
           <Link
             key={to}
