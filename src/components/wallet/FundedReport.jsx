@@ -18,7 +18,7 @@ export function buildReport(phrases, funded, scannedCount) {
       .map((holding) =>
         holding.kind === "nft"
           ? `${holding.symbol} ${holding.name}${holding.chainId ? ` (${holding.chainId})` : ""}`
-          : `${formatAmount(holding.amount, 6)} ${holding.symbol}${holding.usd ? ` (${formatUsd(holding.usd)})` : ""}`
+          : `${formatAmount(holding.amount, 8)} ${holding.symbol}${holding.usd ? ` (${formatUsd(holding.usd)})` : ""}`
       )
       .join(", ");
     lines.push(`#${position + 1} · Wallet ${wallet.index} · ${formatUsd(wallet.total)}`);

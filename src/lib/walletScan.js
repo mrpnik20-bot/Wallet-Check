@@ -39,7 +39,6 @@ const DEFAULT_CHUNK = 800;
 const TON_CHUNK = 40;
 const PARALLEL_CHUNKS = 5;
 const COLLECT_CHUNK = 40;
-const DUST_USD = 0.01;
 
 // One chunk per chain keeps each balance request batched on a single network.
 function buildChunks(assets) {
@@ -78,18 +77,16 @@ function holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices }
     const amount = balances[key];
     if (Number.isFinite(amount) && amount > 0) {
       const usd = prices[chainId]?.usd ? amount * prices[chainId].usd : null;
-      if (usd !== null ? usd >= DUST_USD : amount >= 0.0001) {
-        list.push({
-          kind: "coin",
-          chainId,
-          symbol: chain.symbol,
-          name: chain.name,
-          amount,
-          usd,
-          address: shown,
-          link: linkFor(chainId, shown),
-        });
-      }
+      list.push({
+        kind: "coin",
+        chainId,
+        symbol: chain.symbol,
+        name: chain.name,
+        amount,
+        usd,
+        address: shown,
+        link: linkFor(chainId, shown),
+      });
     }
 
     for (const token of tokens[key] || []) {
@@ -109,9 +106,6 @@ function holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices }
       if (!(token.amount > 0)) continue;
       const rate = token.contract ? tokenPrices[`${chainId}|${token.contract.toLowerCase()}`] : null;
       const usd = rate ? token.amount * rate : null;
-      // A token with a known value below a cent is dust; unknown values are kept,
-      // since a coin without a price feed may still be worth holding.
-      if (usd !== null && usd < DUST_USD) continue;
       list.push({
         kind: "token",
         chainId,

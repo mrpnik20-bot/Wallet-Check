@@ -82,7 +82,7 @@ export default function ScanResults({ results }) {
                         </span>
                       ) : (
                         <span className="num">
-                          {formatAmount(holding.amount, 4)} {holding.symbol}
+                          {formatAmount(holding.amount, 8)} {holding.symbol}
                         </span>
                       )}
                       {holding.usd ? <span className="text-white/35">{formatUsd(holding.usd)}</span> : null}

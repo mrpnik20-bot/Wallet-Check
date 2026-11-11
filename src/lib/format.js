@@ -1,4 +1,7 @@
 export function formatUsd(value) {
+  const amount = Number(value) || 0;
+  // A tiny non-zero holding still deserves to be shown, not rounded away.
+  if (amount > 0 && amount < 0.01) return "<$0.01";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
