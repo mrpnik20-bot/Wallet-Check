@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { MAX_PHRASES, parsePhrases } from "@/lib/phraseParser";
 import { parseFilePhrases } from "@/lib/parsePool";
 
-const MAX_FILE_BYTES = 100 * 1024 * 1024;
+const MAX_FILE_BYTES = 500 * 1024 * 1024;
 
 // Every text format the parser can read — phrases are picked out of any layout.
 const FILE_TYPES =
@@ -36,7 +36,7 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
     if (!picked) return;
     setFileError("");
     if (picked.size > MAX_FILE_BYTES) {
-      setFileError("That file is too large. Use a file under 100 MB.");
+      setFileError("That file is too large. Use a file under 500 MB.");
       return;
     }
     setReading({ done: 0, total: 1 });

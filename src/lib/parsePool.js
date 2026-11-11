@@ -1,6 +1,6 @@
 // Reads a big pasted/uploaded list in chunks on worker threads, so a multi-megabyte
 // file never freezes the screen and valid recovery phrases show up progressively.
-import { parsePhrases } from "./phraseParser";
+import { MAX_PHRASES, parsePhrases } from "./phraseParser";
 
 const CHUNK_CHARS = 350000;
 
@@ -35,7 +35,7 @@ function createWorkers() {
 
 const SLICE_BYTES = 4 * 1024 * 1024;
 
-// Reads a huge file slice by slice, so even a 100 MB list is parsed without
+// Reads a huge file slice by slice, so even a 500 MB list is parsed without
 // loading it into memory in one go. A phrase is never split across slices.
 export async function parseFilePhrases(file, onProgress) {
   const total = Math.max(1, Math.ceil(file.size / SLICE_BYTES));
@@ -64,8 +64,12 @@ export async function parseFilePhrases(file, onProgress) {
       if (seen.has(phrase)) continue;
       seen.add(phrase);
       phrases.push(phrase);
+      // Only this many wallets are ever checked per run, so reading stops there
+      // instead of filling memory with the rest of a very large file.
+      if (phrases.length >= MAX_PHRASES) break;
     }
     onProgress?.({ done: index + 1, total, count: phrases.length });
+    if (phrases.length >= MAX_PHRASES) break;
   }
 
   return { phrases, lines };
