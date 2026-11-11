@@ -1,4 +1,5 @@
-import { createClientFromRequest, getAccessToken } from "@base44/sdk";
+import { createClient, createClientFromRequest, getAccessToken } from "@base44/sdk";
+import { getAppParams } from "@/lib/app-params";
 import { createMiddleware } from "@tanstack/react-start";
 import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 
@@ -7,9 +8,23 @@ import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 // a handler that never touches Base44 must still answer without them. The
 // platform sets those headers on every request that reaches the server; a
 // visitor's Authorization header makes the client act as that visitor.
+const buildClient = (request) => {
+  try {
+    return createClientFromRequest(request);
+  } catch {
+    // Not served by the platform (a Vercel deployment has no platform headers), so build the
+    // same client from the app's own id and the visitor's token.
+    const auth = request.headers.get("Authorization");
+    return createClient({
+      appId: getAppParams().appId,
+      token: auth && auth.startsWith("Bearer ") ? auth.slice(7) : undefined,
+    });
+  }
+};
+
 const withGetBase44 = (next, request = getRequest()) => {
   let client;
-  return next({ context: { getBase44: () => (client ??= createClientFromRequest(request)) } });
+  return next({ context: { getBase44: () => (client ??= buildClient(request)) } });
 };
 
 // Applied to every server function by src/start.js: sends the visitor's Base44

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build:vercel",
+  "installCommand": "npm install",
+  "rewrites": [
+    {
+      "source": "/api/apps/:path*",
+      "destination": "https://just-omni-vault-core.base44.app/api/apps/:path*"
+    }
+  ]
+}
