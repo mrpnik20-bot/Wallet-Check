@@ -5,12 +5,15 @@ import { formatAmount, formatUsd, shortAddress } from "@/lib/format";
 
 const PAGE = 100;
 
-export default function ScanResults({ results }) {
+export default function ScanResults({ results, total: scannedCount = results.length }) {
   const [fundedOnly, setFundedOnly] = useState(true);
   const [limit, setLimit] = useState(PAGE);
   const funded = results.filter((wallet) => wallet.holdings.length > 0);
   const total = funded.reduce((sum, wallet) => sum + wallet.total, 0);
-  const pool = fundedOnly ? funded : results;
+  // Above a few thousand wallets only funded ones are kept, so there is no
+  // empty list to switch to.
+  const canShowAll = results.length > funded.length;
+  const pool = fundedOnly || !canShowAll ? funded : results;
   const shown = pool.slice(0, limit);
 
   return (
@@ -19,27 +22,31 @@ export default function ScanResults({ results }) {
         <p className="label-xs">Total found</p>
         <p className="num mt-2 text-[30px] font-semibold leading-none text-white">{formatUsd(total)}</p>
         <p className="mt-2 text-[12px] text-white/40">
-          {funded.length} of {results.length} wallets hold a balance
+          {funded.length} of {scannedCount} wallets hold a balance
         </p>
       </div>
 
       <div className="flex items-center justify-between">
         <h2 className="font-heading text-[16px] font-semibold text-white">Wallets</h2>
-        <button
-          type="button"
-          onClick={() => {
-            setFundedOnly((value) => !value);
-            setLimit(PAGE);
-          }}
-          className="rounded-full border border-white/[0.09] px-3 py-1.5 text-[11.5px] text-white/55 transition-colors hover:text-white"
-        >
-          {fundedOnly ? "With balance only" : "All wallets"}
-        </button>
+        {canShowAll && (
+          <button
+            type="button"
+            onClick={() => {
+              setFundedOnly((value) => !value);
+              setLimit(PAGE);
+            }}
+            className="rounded-full border border-white/[0.09] px-3 py-1.5 text-[11.5px] text-white/55 transition-colors hover:text-white"
+          >
+            {fundedOnly ? "With balance only" : "All wallets"}
+          </button>
+        )}
       </div>
 
       {shown.length === 0 ? (
         <p className="glass px-4 py-6 text-center text-[12.5px] text-white/40">
-          No balance in these wallets yet. Try the full list to see every address.
+          {canShowAll
+            ? "No balance in these wallets yet. Try the full list to see every address."
+            : "No balance in these wallets yet."}
         </p>
       ) : (
         <div className="space-y-2.5">

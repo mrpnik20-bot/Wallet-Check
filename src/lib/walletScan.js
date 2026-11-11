@@ -206,39 +206,31 @@ async function readTokenPrices(tokens) {
   }
 }
 
-export async function scanPhrases(phrases, onProgress, options = {}) {
-  const cancelled = () => !!options.isCancelled?.();
-  const list = phrases.slice(0, MAX_PHRASES);
+// Wallets are checked in batches: a list of a million phrases is derived, read
+// and released a few thousand wallets at a time, so memory stays flat. Only
+// wallets that hold something are kept for the list (all of them for short lists).
+const WALLET_BATCH = 1200;
+const KEEP_ALL_WALLETS = 5000;
 
-  const addresses = await deriveAll(list, {
-    onProgress: ({ done, total }) => onProgress?.({ stage: "derive", done, total }),
-    isCancelled: cancelled,
-  });
-  if (cancelled()) return [];
-
-  const prices = await getChainPrices().catch(() => ({}));
-
-  const wallets = [];
+async function readBatchBalances(wallets, wantTokens, onProgress, base, listLength, cancelled) {
   const assets = [];
   const seen = new Set();
-  list.forEach((phrase, index) => {
-    const derived = addresses[index] || {};
-    wallets.push({ index: index + 1, addresses: derived });
+  for (const wallet of wallets) {
     for (const chainId of SCAN_CHAIN_IDS) {
-      const address = derived[chainId];
+      const address = wallet.addresses[chainId];
       if (!address) continue;
       const key = `${chainId}|${address}`;
       if (seen.has(key)) continue;
       seen.add(key);
       assets.push({ key, chain_id: chainId, address });
     }
-  });
+  }
 
   const balances = {};
   const tokens = {};
   const resolved = {};
   const chunks = buildChunks(assets);
-  let checked = 0;
+  let read = 0;
   let cursor = 0;
 
   const worker = async () => {
@@ -246,17 +238,22 @@ export async function scanPhrases(phrases, onProgress, options = {}) {
       const chunk = chunks[cursor];
       cursor += 1;
       try {
-        const result = await scanWalletBalances({
-          data: { assets: chunk, tokens: !!options.collectibles },
-        });
+        const result = await scanWalletBalances({ data: { assets: chunk, tokens: wantTokens } });
         Object.assign(balances, result.balances || {});
         Object.assign(tokens, result.tokens || {});
         Object.assign(resolved, result.resolved || {});
       } catch {
         // chunk failed — those wallets simply show no balance
       }
-      checked += chunk.length;
-      onProgress?.({ stage: "check", done: checked, total: assets.length });
+      read += chunk.length;
+      if (onProgress) {
+        const share = assets.length > 0 ? read / assets.length : 1;
+        onProgress({
+          stage: "check",
+          done: base + Math.round(share * wallets.length),
+          total: listLength,
+        });
+      }
     }
   };
 
@@ -264,21 +261,66 @@ export async function scanPhrases(phrases, onProgress, options = {}) {
     Array.from({ length: Math.min(PARALLEL_CHUNKS, chunks.length) }, () => worker())
   );
 
-  const tokenPrices = await readTokenPrices(tokens);
+  return { balances, tokens, resolved };
+}
 
-  let results = wallets.map((wallet) => {
-    const holdings = holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices });
-    const total = holdings.reduce((sum, item) => sum + (item.usd || 0), 0);
-    return { ...wallet, holdings, total };
-  });
+export async function scanPhrases(phrases, onProgress, options = {}) {
+  const cancelled = () => !!options.isCancelled?.();
+  const list = phrases.slice(0, MAX_PHRASES);
+  const keepAll = list.length <= KEEP_ALL_WALLETS;
+  const prices = await getChainPrices().catch(() => ({}));
 
-  if (options.collectibles && !cancelled()) {
-    results = await addCollectibles(results, resolved, onProgress, cancelled);
-    for (const row of results) {
-      row.total = row.holdings.reduce((sum, item) => sum + (item.usd || 0), 0);
+  const rows = [];
+  let derived = 0;
+  let checked = 0;
+
+  for (let start = 0; start < list.length; start += WALLET_BATCH) {
+    if (cancelled()) break;
+    const slice = list.slice(start, start + WALLET_BATCH);
+
+    const addresses = await deriveAll(slice, {
+      onProgress: ({ done }) =>
+        onProgress?.({ stage: "derive", done: derived + done, total: list.length }),
+      isCancelled: cancelled,
+    });
+    derived += slice.length;
+    if (cancelled()) break;
+
+    const wallets = slice.map((_, position) => ({
+      index: start + position + 1,
+      addresses: addresses[position] || {},
+    }));
+
+    const { balances, tokens, resolved } = await readBatchBalances(
+      wallets,
+      !!options.collectibles,
+      onProgress,
+      checked,
+      list.length,
+      cancelled
+    );
+    const tokenPrices = await readTokenPrices(tokens);
+
+    let batch = wallets.map((wallet) => {
+      const holdings = holdingsFor(wallet, { balances, tokens, resolved, prices, tokenPrices });
+      const total = holdings.reduce((sum, item) => sum + (item.usd || 0), 0);
+      return { ...wallet, holdings, total };
+    });
+
+    if (options.collectibles && !cancelled()) {
+      batch = await addCollectibles(batch, resolved, onProgress, cancelled);
+      for (const row of batch) {
+        row.total = row.holdings.reduce((sum, item) => sum + (item.usd || 0), 0);
+      }
     }
+
+    checked += wallets.length;
+    for (const row of batch) {
+      if (keepAll || row.holdings.length > 0) rows.push(row);
+    }
+    onProgress?.({ stage: "check", done: checked, total: list.length });
   }
 
-  results.sort((a, b) => b.total - a.total || b.holdings.length - a.holdings.length);
-  return results;
+  rows.sort((a, b) => b.total - a.total || b.holdings.length - a.holdings.length);
+  return { rows, checked };
 }

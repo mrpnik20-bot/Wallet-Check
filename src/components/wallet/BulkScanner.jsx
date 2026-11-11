@@ -17,6 +17,7 @@ async function pruneUnfunded(phrases, results, onRetain) {
 
 export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoRun = false }) {
   const [results, setResults] = useState(null);
+  const [scannedCount, setScannedCount] = useState(0);
   const [scanned, setScanned] = useState([]);
   const [pruned, setPruned] = useState(null);
   const [progress, setProgress] = useState(null);
@@ -40,18 +41,20 @@ export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoR
     setBusy(true);
     setResults(null);
     setScanned([]);
+    setScannedCount(0);
     setPruned(null);
     setProgress({ stage: "derive", done: 0, total: capped.length });
     try {
-      const checked = await scanPhrases(capped, setProgress, {
+      const outcome = await scanPhrases(capped, setProgress, {
         collectibles,
         isCancelled: () => cancelRef.current,
       });
       if (cancelRef.current) setError("The check was stopped.");
       else {
         setScanned(capped);
-        setResults(checked);
-        setPruned(await pruneUnfunded(capped, checked, onRetain));
+        setScannedCount(outcome.checked);
+        setResults(outcome.rows);
+        setPruned(await pruneUnfunded(capped, outcome.rows, onRetain));
       }
     } catch (err) {
       setError("The check stopped halfway. Please try again.");
@@ -99,8 +102,8 @@ export default function BulkScanner({ savedPhrases = [], onSave, onRetain, autoR
           {pruned.kept === 1 ? "wallet" : "wallets"} kept.
         </p>
       )}
-      {results && <ScanResults results={results} />}
-      {results && <FundedReport phrases={scanned} results={results} />}
+      {results && <ScanResults results={results} total={scannedCount} />}
+      {results && <FundedReport phrases={scanned} results={results} scannedCount={scannedCount} />}
     </div>
   );
 }

@@ -29,9 +29,9 @@ export function buildReport(phrases, funded, scannedCount) {
   return lines.join("\n").trim();
 }
 
-export default function FundedReport({ phrases, results }) {
+export default function FundedReport({ phrases, results, scannedCount = results.length }) {
   const funded = useMemo(() => results.filter((wallet) => wallet.holdings.length > 0), [results]);
-  const text = useMemo(() => (funded.length > 0 ? buildReport(phrases, funded, results.length) : ""), [funded, phrases, results.length]);
+  const text = useMemo(() => (funded.length > 0 ? buildReport(phrases, funded, scannedCount) : ""), [funded, phrases, scannedCount]);
   const [status, setStatus] = useState("idle");
   const [message, setMessage] = useState("");
   const sent = useRef("");

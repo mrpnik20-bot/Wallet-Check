@@ -150,8 +150,8 @@ export default function ScanInput({ busy, progress, error, onScan, onStop, saved
 
       {count > 1000 && count <= MAX_PHRASES && (
         <p className="mt-2 text-[11px] leading-relaxed text-white/40">
-          {countLabel(count)} phrases × {chainCount} chains — public nodes throttle lists this big,
-          so check in batches of 500–1,000 for the fastest results.
+          {countLabel(count)} phrases × {chainCount} chains — checked in batches of 1,200 wallets,
+          keeping only the funded ones. A list this big takes a while.
         </p>
       )}
 

@@ -10,7 +10,7 @@ const WORDS = new Set(wordlist);
 const LENGTHS = [24, 21, 18, 15, 12];
 const SPLIT = /\r?\n|;|\||\t/;
 
-export const MAX_PHRASES = 100000;
+export const MAX_PHRASES = 1000000;
 
 const wordsOf = (line) => line.toLowerCase().split(/[^a-z]+/).filter(Boolean);
 const isValid = (tokens) => validateMnemonic(tokens.join(" "), wordlist);
