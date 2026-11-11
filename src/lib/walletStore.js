@@ -1,27 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
 import { CHAINS, getChain } from "./chains";
 import { fetchChainBalances } from "./server-fns";
 import { deriveAddresses } from "./walletKeys";
 import { useWallet } from "./WalletContext";
 
-const loadRows = () => base44.entities.WalletAccount.list("-created_date", 50);
+// Watch-only addresses live on this device, like the encrypted phrase — no account needed.
+const WATCH_KEY = "meridian.watch.addresses";
+
+const readWatch = () => {
+  try {
+    const raw = window.localStorage.getItem(WATCH_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeWatch = (map) => {
+  try {
+    window.localStorage.setItem(WATCH_KEY, JSON.stringify(map));
+  } catch {
+    // storage unavailable — the address simply won't persist
+  }
+};
 
 // Watch-only chains (no signing support yet) keep a manually entered address.
 export async function saveAddress(chainId, address) {
   const chain = getChain(chainId);
   if (!chain) throw new Error("unknown chain");
-  const rows = await loadRows();
-  const existing = rows.find((row) => row.chain_id === chainId);
-  if (existing) {
-    return base44.entities.WalletAccount.update(existing.id, { address, symbol: chain.symbol });
-  }
-  return base44.entities.WalletAccount.create({ chain_id: chainId, symbol: chain.symbol, address });
+  writeWatch({ ...readWatch(), [chainId]: address });
+  return { chain_id: chainId, symbol: chain.symbol, address };
 }
 
 export async function resetWalletData() {
-  const rows = await loadRows();
-  await Promise.all(rows.map((record) => base44.entities.WalletAccount.delete(record.id)));
+  try {
+    window.localStorage.removeItem(WATCH_KEY);
+  } catch {
+    // nothing stored
+  }
 }
 
 export function useAccounts() {
@@ -41,12 +58,11 @@ export function useAccounts() {
       derived = {};
     }
 
-    const rows = await loadRows();
-    const watch = new Map(rows.filter((row) => row.address).map((row) => [row.chain_id, row]));
+    const watch = readWatch();
 
     const connected = CHAINS.map((chain) => ({
       chain_id: chain.id,
-      address: derived[chain.id] || watch.get(chain.id)?.address || "",
+      address: derived[chain.id] || watch[chain.id] || "",
       derived: Boolean(derived[chain.id]),
     })).filter((row) => row.address);
 
@@ -70,7 +86,7 @@ export function useAccounts() {
       const entry = connected.find((row) => row.chain_id === chain.id);
       const price = prices[chain.id];
       return {
-        id: watch.get(chain.id)?.id || null,
+        id: null,
         chain_id: chain.id,
         symbol: chain.symbol,
         address: entry?.address || "",

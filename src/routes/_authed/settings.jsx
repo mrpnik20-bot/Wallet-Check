@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronRight, Eye, KeyRound, Lock, LogOut, Trash2, UserRound } from "lucide-react";
-import { useAuth } from "@/lib/AuthContext";
+import { ChevronRight, Eye, KeyRound, Lock, Trash2, UserRound } from "lucide-react";
 import { useWallet } from "@/lib/WalletContext";
 import { resetWalletData, useAccounts } from "@/lib/walletStore";
 import { shortAddress } from "@/lib/format";
@@ -54,7 +53,6 @@ function Row({ Icon, title, hint, onClick, danger }) {
 }
 
 function SettingsPage() {
-  const { user, logout } = useAuth();
   const { lock, forget } = useWallet();
   const { accounts } = useAccounts();
   const navigate = useNavigate();
@@ -84,8 +82,8 @@ function SettingsPage() {
           <UserRound size={18} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14.5px] font-medium text-white/90">{user?.full_name || "Wallet user"}</p>
-          <p className="truncate text-[12px] text-white/35">{user?.email}</p>
+          <p className="truncate text-[14.5px] font-medium text-white/90">Your wallet</p>
+          <p className="truncate text-[12px] text-white/35">Opened with your seed phrase — stored on this device only</p>
         </div>
       </div>
 
@@ -125,7 +123,6 @@ function SettingsPage() {
           danger
           onClick={() => setForgetOpen(true)}
         />
-        <Row Icon={LogOut} title="Sign out" hint="Sign out of your account" onClick={() => logout()} />
       </section>
 
       <SeedDialog open={seedOpen} onOpenChange={setSeedOpen} />

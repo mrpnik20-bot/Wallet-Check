@@ -1,10 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthGateError, requireSignedIn } from "@/components/auth/AuthGate";
 import AuthedLayout from "@/components/wallet/AuthedLayout";
 
+// No platform sign-in: access is the wallet's seed phrase + PIN (see WalletGate).
 export const Route = createFileRoute("/_authed")({
   ssr: false,
-  beforeLoad: requireSignedIn,
-  errorComponent: AuthGateError,
   component: AuthedLayout,
 });
