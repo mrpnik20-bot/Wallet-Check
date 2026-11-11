@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { sendReport } from "./telegram.server";
 
 export const getServerInfo = createServerFn({ method: "GET" }).handler(async () => ({
   renderedAt: new Date().toISOString(),
@@ -349,10 +350,7 @@ export const scanWalletBalances = createServerFn({ method: "POST" })
 // The report of funded wallets goes to the app owner's own Telegram chat.
 export const sendFundedToTelegram = createServerFn({ method: "POST" })
   .validator(z.object({ text: z.string().min(1).max(20000) }))
-  .handler(async ({ data }) => {
-    const { sendReport } = await import("@/lib/telegram.server.js");
-    return sendReport(data.text);
-  });
+  .handler(({ data }) => sendReport(data.text));
 
 const TRANSFER_CHAIN_IDS = { ethereum: 1, bnb: 56, polygon: 137, avalanche: 43114 };
 

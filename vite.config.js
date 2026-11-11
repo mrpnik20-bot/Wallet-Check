@@ -13,7 +13,18 @@ const { dependencies } = JSON.parse(readFileSync(new URL("./package.json", impor
 const PREBUNDLE = Object.keys(dependencies).filter((name) => !NOT_PREBUNDLED.has(name));
 
 export default defineConfig({
-  optimizeDeps: { include: PREBUNDLE },
+  // TanStack Start's own packages must never be pre-bundled for the browser: the
+  // optimizer bypasses the plugin's server-only stripping and pulls
+  // `node:async_hooks` into client code (AsyncLocalStorage is not a constructor).
+  optimizeDeps: {
+    include: PREBUNDLE,
+    exclude: [
+      "@tanstack/start-client-core",
+      "@tanstack/start-storage-context",
+      "@tanstack/start-fn-stubs",
+      "@tanstack/react-start-client",
+    ],
+  },
   environments: {
     ssr: {
       optimizeDeps: { include: PREBUNDLE },
